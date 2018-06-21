@@ -24,7 +24,7 @@ namespace AgentTransferBot
         [LuisIntent("")]
         public async Task None(IDialogContext context, LuisResult luisResult)
         {
-            await context.PostAsync("I didn't understand you.am Iss?");
+            await context.PostAsync("I didn't understand you.am Isss?");
             await context.PostAsync("You can contact our cusomer care representative by typing \"Connect me with customer care\"");
             context.Done<object>(null);
         }
