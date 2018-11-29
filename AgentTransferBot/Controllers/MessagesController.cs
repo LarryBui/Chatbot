@@ -12,6 +12,10 @@ using Microsoft.Bot.Builder.Dialogs.Internals;
 using Autofac;
 using System.Threading;
 using static AgentTransferBot.Utilities;
+using System.Web;
+using System.IO;
+using AdaptiveCards;
+using AgentTransferBot.Dialogs;
 
 namespace AgentTransferBot
 {
@@ -26,7 +30,26 @@ namespace AgentTransferBot
         {
             if (activity.Type == ActivityTypes.Message)
             {
-                await SendAsync(activity, (scope) => new TransferLuisDialog(scope.Resolve<IUserToAgent>()));
+                
+                    await SendAsync(activity, (scope) => new RootDialog(scope.Resolve<IUserToAgent>()));
+
+                
+                //if (activity.Value != null)
+                //{
+                //    //using (var scope = DialogModule.BeginLifetimeScope(Conversation.Container, activity))
+                //    //{
+                //    //    var client = scope.Resolve<IConnectorClient>();
+                //    //    var reply1 = activity.CreateReply();
+                //    //    reply1.Text = "going to root";
+                //    //    await client.Conversations.ReplyToActivityAsync(reply1);
+                //    //}
+                //    //await Conversation.SendAsync(activity, () => new RootDialog());
+                //}
+                //else
+                //{
+                //    await SendAsync(activity, (scope) => new TransferLuisDialog(scope.Resolve<IUserToAgent>()));
+                //}
+
             }
             else
             {
@@ -45,9 +68,45 @@ namespace AgentTransferBot
             }
             else if (message.Type == ActivityTypes.ConversationUpdate)
             {
-                // Handle conversation state changes, like members being added and removed
-                // Use Activity.MembersAdded and Activity.MembersRemoved and Activity.Action for info
-                // Not available in all channels
+                IConversationUpdateActivity update = message;
+                using (var scope = DialogModule.BeginLifetimeScope(Conversation.Container, message))
+                {
+                    var client = scope.Resolve<IConnectorClient>();
+                    if (update.MembersAdded.Any())
+                    {
+                        var reply = message.CreateReply();
+                        foreach (var newMember in update.MembersAdded)
+                        {
+                            //var reply1 = message.CreateReply();
+                            //reply1.Text = "new member" +  newMember.Name.ToLower();
+                            //await client.Conversations.ReplyToActivityAsync(reply1);
+                            // the bot is always added as a user of the conversation, since we don't
+                            // want to display the adaptive card twice ignore the conversation update triggered by the bot
+                            if (newMember.Name.ToLower() != "you")
+                            {
+                                try
+                                {
+                                    // read the json in from our file
+                                    string json = File.ReadAllText(HttpContext.Current.Request.MapPath("~\\AdaptiveCards\\MyCard.json"));
+                                    // use Newtonsofts JsonConvert to deserialized the json into a C# AdaptiveCard object
+                                    AdaptiveCards.AdaptiveCard card = JsonConvert.DeserializeObject<AdaptiveCards.AdaptiveCard>(json);
+                                    // put the adaptive card as an attachment to the reply message
+                                    reply.Attachments.Add(new Attachment
+                                    {
+                                        ContentType = AdaptiveCard.ContentType,
+                                        Content = card
+                                    });
+                                }
+                                catch (Exception e)
+                                {
+                                    // if an error occured add the error text as the message
+                                    reply.Text = e.Message;
+                                }
+                                await client.Conversations.ReplyToActivityAsync(reply);
+                            }
+                        }
+                    }
+                }
             }
             else if (message.Type == ActivityTypes.ContactRelationUpdate)
             {
